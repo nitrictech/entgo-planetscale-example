@@ -2,10 +2,13 @@ module github.com/nitrictech/entgo-planetscale-example
 
 go 1.18
 
-require entgo.io/ent v0.11.3
+require (
+	ariga.io/atlas v0.7.2-0.20220927111110-867ee0cca56a
+	entgo.io/ent v0.11.3
+	github.com/go-sql-driver/mysql v1.6.0
+)
 
 require (
-	ariga.io/atlas v0.7.2-0.20220927111110-867ee0cca56a // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
