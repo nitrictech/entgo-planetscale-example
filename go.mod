@@ -1,4 +1,4 @@
-module ithub.com/nitrictech/entgo-planetscale-example
+module github.com/nitrictech/entgo-planetscale-example
 
 go 1.18
 
