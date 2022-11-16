@@ -1,3 +1,5 @@
-h1:gMofK6wbvoWIZX3MHz8m96y9UpeW9JopKvXkof65qII=
+h1:nxI+sIpT7+fR3+4ETea0DJXcvIcxt9MgcbnIRKB32VE=
 20221012050944_add-users.down.sql h1:xM7q8EP/VvWoWKEZEX6DLmTjGwK1B1pImDjbXqXNI+s=
 20221012050944_add-users.up.sql h1:2mXXnpykKV7RIs8kYK0ZM9Y8HtryKRAFcndW0f/6EEY=
+20221116015111_user-name-email.down.sql h1:b1f9l3ouBzlP1gR+e5tLF1g/hofh507uJzBdTiAU2BQ=
+20221116015111_user-name-email.up.sql h1:bBVDVO66htKp3qa1xwjsu0PCC/FF+GhWOTLOmnwXzsM=
