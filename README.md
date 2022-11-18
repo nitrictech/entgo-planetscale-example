@@ -10,6 +10,14 @@
 [planetscale](https://planetscale.com) is super easy to setup and has a great free tier whether or not
 you are a fan of their extra features like schema branching and merging.
 
+#### Why use an ORM with type checking?
+
+With gorm you do queries like `db.Where("name = ?", name).Find(&user)` and the query must be unit tested as it could have 
+spelling mistakes/copy-paste errors.
+
+The entgo equivalent is `db.User.Query().Where(user.NameEQ(name)).First(context.TODO())` and we get
+field type checking.
+
 ### To use versioned migrations or planetscale schema merges?
 
 Right now we don't use planetscales' schema merges but we are thinking about it.
@@ -111,6 +119,23 @@ index 0000000..8d400fc
 +20221012050944_add-users.up.sql h1:2mXXnpykKV7RIs8kYK0ZM9Y8HtryKRAFcndW0f/6EEY=
 ```
 
+### Add some more fields to the User
+
+1. Edit ent/schema/user.go
+
+```diff
+func (User) Fields() []ent.Field {
+-	return nil
++	return []ent.Field{
++		field.String("name"),
++		field.String("email"),
++	}
+ }
+ ```
+
+2. go generate ./...
+3. go run ./cmd/migration user-name-email
+
 ## setup a planetscale DB
 
 Taken from: https://planetscale.com/docs/tutorials/connect-go-gorm-app
@@ -124,7 +149,7 @@ Take note of the values returned to you, as you won't be able to see this passwo
 
 export an environment variable "DSN" to the value have from above. Below is the value for the local docker mysql.
 ```bash
-export DSN="root:pass@tcp(localhost:3306)/deploy-test"
+export DSN="root:pass@tcp(localhost:3306)/test"
 ```
 
 ## Create an example app
