@@ -84,6 +84,168 @@ Remember to run this fresh each time you generate migrations.
 docker run --name migration --rm -p 3306:3306 -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_DATABASE=test -d mysql
 ```
 
+Create the main.go file as follows
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	"github.com/nitrictech/entgo-planetscale-example/ent"
+	"github.com/nitrictech/entgo-planetscale-example/ent/user"
+)
+
+var (
+	db *ent.Client
+
+	migrationExecuteCmd = &cobra.Command{
+		Use:   "execute",
+		Short: "Execute the migrations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			db, err = mysqlConnectAndMigrate(os.Getenv("DSN"), true)
+			return err
+		},
+	}
+	migrationCreateCmd = &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create a new migration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return createMigration(args[0])
+		},
+	}
+	migrationCmd = &cobra.Command{
+		Use: "migration",
+	}
+
+	rootCmd = &cobra.Command{
+		Use:   "cmd",
+		Short: "entgo + planetscale example",
+	}
+)
+
+func init() {
+	// migration commands
+	migrationCmd.AddCommand(migrationCreateCmd)
+	migrationCmd.AddCommand(migrationExecuteCmd)
+	rootCmd.AddCommand(migrationCmd)
+}
+
+func main() {
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+```
+Create a second file mysql.go
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"time"
+
+	atlas "ariga.io/atlas/sql/migrate"
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/schema"
+	_ "github.com/go-sql-driver/mysql"
+	sqlmysql "github.com/go-sql-driver/mysql"
+	gomigrate "github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
+	"github.com/nitrictech/entgo-planetscale-example/ent"
+	"github.com/nitrictech/entgo-planetscale-example/ent/migrate"
+	"github.com/nitrictech/entgo-planetscale-example/ent/migrate/migrations"
+)
+
+func createMigration(name string) error {
+	if name == "" {
+		return errors.New("migration name is required. Use: 'go run ./cmd/migration <name>'")
+	}
+
+	dir, err := atlas.NewLocalDir("ent/migrate/migrations")
+	if err != nil {
+		return errors.WithMessage(err, "failed creating atlas migration directory")
+	}
+
+	opts := []schema.MigrateOption{
+		schema.WithDir(dir),                         // provide migration directory
+		schema.WithMigrationMode(schema.ModeReplay), // provide migration mode
+		schema.WithDialect(dialect.MySQL),           // Ent dialect to use
+		schema.WithForeignKeys(false),               // planetscale uses https://vitess.io/ that requires foreign keys off
+		schema.WithDropColumn(true),
+	}
+
+	// Generate migrations using Atlas support for MySQL (note the Ent dialect option passed above).
+	return migrate.NamedDiff(context.TODO(), "mysql://root:pass@localhost:3306/deploy-test", name, opts...)
+}
+
+func mysqlConnectAndMigrate(dsn string, migrate bool) (*ent.Client, error) {
+	pDSN, err := sqlmysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	pDSN.ParseTime = true
+	pDSN.Loc = time.Local
+
+	if pDSN.Params == nil {
+		pDSN.Params = map[string]string{}
+	}
+
+	pDSN.Params["tls"] = "true"
+	pDSN.Params["charset"] = "utf8mb4"
+	if migrate {
+		pDSN.Params["multiStatements"] = "true"
+	}
+
+	dsn = pDSN.FormatDSN()
+
+	db, err := sql.Open(dialect.MySQL, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	if migrate {
+		d, err := migrations.MigrationFS()
+		if err != nil {
+			return nil, errors.WithMessage(err, "iofs.New")
+		}
+
+		m, err := gomigrate.NewWithSourceInstance("iofs", d, "mysql://"+dsn)
+		if err != nil {
+			return nil, errors.WithMessage(err, "NewWithSourceInstance")
+		}
+
+		if err := m.Up(); err != nil {
+			if !errors.Is(err, gomigrate.ErrNoChange) {
+				return nil, errors.WithMessage(err, "db migrations update")
+			}
+		}
+	}
+
+	return ent.NewClient(
+		ent.Driver(entsql.NewDriver(
+			dialect.MySQL,
+			entsql.Conn{ExecQuerier: db})),
+		ent.Log(logrus.Info)), nil
+}
+```
+
+
 Generate the new migration
 ```bash
 mkdir -p ent/migrate/migrations
@@ -134,7 +296,7 @@ func (User) Fields() []ent.Field {
  ```
 
 2. go generate ./...
-3. go run ./cmd/migration user-name-email
+3. go run . migration create user-name-email
 
 ## setup a planetscale DB
 
@@ -240,5 +402,9 @@ User(id=3, name=John Deer, email=dearjohn@example.com)
 go run . user delete -i 3
 go run . user list
 ```
+
+## Wrap up
+
+And that is it, you now have a running entgo + planetscale app!
 
 Note the full code is here https://github.com/nitrictech/entgo-planetscale-example
