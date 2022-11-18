@@ -25,7 +25,7 @@ We are currently running the schema upgrade withing our app so this is happening
 Pros: no need for schema compatibility, but with the
 Con: of 'if the schema upgrade fails, there is downtime'.
 
-## Howto
+## How to
 
 Steps we are going to take
 1. create a repo and basic setup of entgo
@@ -79,7 +79,7 @@ docker run --name migration --rm -p 3306:3306 -e MYSQL_ROOT_PASSWORD=pass -e MYS
 Generate the new migration
 ```bash
 mkdir -p ent/migrate/migrations
-go run ./cmd/migrations add-users
+go run . migration create add-users
 ```
 
 This will create the following migrations
@@ -122,15 +122,98 @@ pscale password create <DATABASE_NAME> <BRANCH_NAME> <PASSWORD_NAME>
 ```
 Take note of the values returned to you, as you won't be able to see this password again.
 
-create a .env file and set DSN to the value have from above. Below is the value for the local docker mysql.
+export an environment variable "DSN" to the value have from above. Below is the value for the local docker mysql.
 ```bash
-DSN="root:pass@tcp(localhost:3306)/deploy-test"
+export DSN="root:pass@tcp(localhost:3306)/deploy-test"
 ```
 
 ## Create an example app
 
-*TODO*
+```go
+var (
+	db *ent.Client
+
+	userName      string
+	email         string
+	userID        int
+	userCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "create a user in the DB",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return db.User.Create().
+				SetName(userName).
+				SetEmail(email).
+				Exec(context.TODO())
+		},
+	}
+	userListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "list the users in the DB",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			users, err := db.User.Query().All(context.TODO())
+			if err != nil {
+				return err
+			}
+			for _, u := range users {
+				fmt.Println(u.String())
+			}
+
+			return nil
+		},
+	}
+	userDeleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "delete the user from the DB",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := db.User.Delete().Where(user.IDEQ(userID)).Exec(context.TODO())
+			return err
+		},
+	}
+	userCmd = &cobra.Command{
+		Use:   "user",
+		Short: "user DB CRUD commands",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			db, err = mysqlConnectAndMigrate(os.Getenv("DSN"), false)
+			return err
+		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			return db.Close()
+		},
+	}
+)
+
+func init() {
+	// user CRUD commands
+	rootCmd.AddCommand(userCmd)
+	userCmd.AddCommand(userCreateCmd)
+	userCreateCmd.Flags().StringVarP(&userName, "name", "n", "", "-n John Deer")
+	userCreateCmd.Flags().StringVarP(&email, "email", "e", "", "-e dearjohn@gmail.com")
+	userCmd.AddCommand(userListCmd)
+	userCmd.AddCommand(userDeleteCmd)
+	userDeleteCmd.Flags().IntVarP(&userID, "id", "i", 0, "-i 4")
+}
+
+func main() {
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+```
 
 ## Run the app
 
-*TODO*
+```bash
+go run . migration execute # run the migration
+
+go run . user list
+go run . user create -n "John Deer" -e "dearjohn@example.com" 
+go run . user list
+User(id=3, name=John Deer, email=dearjohn@example.com)
+go run . user delete -i 3
+go run . user list
+```
+
+Note the full code is here https://github.com/nitrictech/entgo-planetscale-example
